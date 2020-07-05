@@ -2,17 +2,15 @@
 from IPython.display import display
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
-import matplotlib.pyplot as plt
 import numpy as np
-import random
-import sys
+import random, sys
 from sklearn.manifold.t_sne import TSNE
 from igmm import IGMM
-import visualization as vs
-import ui
 import plotly.graph_objects as go
-import time
 
+'''
+Wrapper for the Normal Inverse Wishart prior distribution.
+'''
 class NIW(object):
     def __init__(self, m_0, k_0, v_0, S_0):
         self.m_0 = m_0
@@ -20,6 +18,10 @@ class NIW(object):
         self.v_0 = v_0
         self.S_0 = S_0
 
+
+'''
+User Interface class for tuning the values of the hyper-parameters and launching the execution.
+'''
 class IgmmUI(object):
 
   def __init__(self, data):
@@ -41,11 +43,10 @@ class IgmmUI(object):
     self.log_margs = np.zeros(n_iter)
 
     X = self.data
-    start = time.time()
-    self.igmm = IGMM(X, self.prior, alpha, assignments='each-in-own')
+    self.igmm = IGMM(X, self.prior, alpha)
     self.record = self.igmm.gibbs_sample(n_iter)
 
-    self.X_2d, self.clusters_2d, self.centers_2d = vs.convert_2d(self.igmm);
+    self.X_2d, self.clusters_2d, self.centers_2d = self.convert_2d()
     return True
 
 
@@ -53,13 +54,27 @@ class IgmmUI(object):
     data = self.data
     D = data.shape[1]
     params = interactive(self.run_igmm, {'manual': True, 'manual_name': 'Run IGMM'}, n_iter=widgets.IntSlider(min=1,value=10, max=1000),
-    # K = widgets.IntSlider(min=1, value=10, max=500),
     alpha = widgets.FloatSlider(min=1, max=1000, value=5),
     k_0 = widgets.FloatSlider(min=0, max=300, value= 5),
     v_0 = widgets.IntSlider(min=D, max=D*3, value=D+3),
     S_0_scale = widgets.FloatSlider(min=0, max=300, value=1),
     X= data)
     return params
+
+  def convert_2d(self):
+    X = np.array(self.igmm.components.X)
+    for k in range(self.igmm.components.K):
+        mu,_ = self.igmm.components.rand_k(k)
+        mu = mu.reshape(1,-1)
+        X = np.concatenate((X, mu), axis=0)
+
+    X_embedded_train_valid = TSNE(n_components=2).fit_transform(X) 
+    y_train_valid = self.igmm.components.assignments
+
+    centers = X_embedded_train_valid[self.igmm.components.X.shape[0]:]
+    X_embedded_train_valid = X_embedded_train_valid[:self.igmm.components.X.shape[0]]
+
+    return X_embedded_train_valid, y_train_valid, centers
 
   def visualize(self, X, clusters, centers):
     fig = go.Figure()

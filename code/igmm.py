@@ -13,24 +13,11 @@ from gaussian_components_diag import GaussianComponentsDiag
 
 class IGMM(object):
     def __init__(
-            self, X, prior, alpha, assignments="rand", K=1, K_max=None):
+            self, X, prior, alpha, K=1, K_max=None):
 
         self.alpha = alpha
-        N, D = X.shape
-
-        if assignments == "rand":
-            assignments = np.random.randint(0, K, N)
-
-            for k in range(assignments.max()):
-                while len(np.nonzero(assignments == k)[0]) == 0:
-                    assignments[np.where(assignments > k)] -= 1
-                if assignments.max() == k:
-                    break
-        elif assignments == "one-by-one":
-            assignments = -1*np.ones(N, dtype="int")
-            assignments[0] = 0  # first data vector belongs to first component
-        elif assignments == "each-in-own":
-            assignments = np.arange(N)
+        N, _ = X.shape
+        assignments = np.arange(N)
         
         self.components = GaussianComponentsDiag(X, prior, assignments, K_max)
 
@@ -42,8 +29,12 @@ class IGMM(object):
           if k_uni < 0:
               return i
       return len(p_k) - 1
-
-
+    
+    
+    '''
+    Implementation of the Gibbs Sampling algorithm for Dirichlet Process Mixture Models. 
+    See artifacts/Mardale, Doust, Couge, Ekpo_PGM_Deliverable_2.pdf for the mathematical derivations.
+    '''
     def gibbs_sample(self, n_iter):
         record_dict = {}
         record_dict["components"] = []
@@ -59,7 +50,7 @@ class IGMM(object):
                 log_prob_z = np.zeros(self.components.K + 1, np.float)
                 log_prob_z[:self.components.K] = np.log((self.components.counts[:self.components.K]) / (self.components.N + self.alpha -1))+  self.components.log_post_pred(i)
                 log_prob_z[-1] = math.log(self.alpha / (self.components.N + self.alpha -1)) + self.components.cached_log_prior[i] 
-                #paul: log-sim-exp trick / like normalization
+                # andrei: log-sim-exp trick / like normalization
                 prob_z = np.exp(log_prob_z - logsumexp(log_prob_z))
                
                 k = self.draw(prob_z)
